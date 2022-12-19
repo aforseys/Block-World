@@ -1,0 +1,1 @@
+"clicking a green block always gives you one point.  \rclicking a blue block immediatly followed by a red block is 3 points.  \rclicking a red block immediatly followed by a blue block is -5 points.  \rclicking a red block immedatly followed by any block that is not blue is -10 points\rclicking any blue block immediately followed by a block that is not red is -10 points"
