@@ -1,0 +1,69 @@
+
+//get participant, game, slice size, and output folder from command line arguments 
+var p = argv.participant
+var g = argv.game
+var bound = argv.bound
+var output_folder = argv.output
+
+var file = p.concat(g, "_obs.json")
+var observations = json.read("/Users/aforsey/Desktop/Block\ World\ Final\ Project/DATA/new_json_files/".concat(file)).slice(0,bound) //new json files break up by player and game
+//display(observations.length)
+
+var rulesets = json.read("/Users/aforsey/Desktop/Block\ World\ Final\ Project/hypotheses_shortened.json")
+
+//get prior based on hypothesis type 
+var getPrior = function(ruleset){
+  return 1/ruleset.type
+}
+
+var priors = map(getPrior, rulesets)
+//display(priors)
+
+// the model assumes a uniform prior over which rule is being used (this could be modified in the full version to give
+// less prior probability to more complicated rules
+var model = function() {
+  var rule = sample(Categorical({ps: priors, vs: rulesets}))
+  
+  // function that takes a given game state/observation and calculates the reward
+  var play = function(state) {
+    
+    //Checks that rule has a specification defined for the background of the last click,  
+    //and that the background history of the observation matches the required history of 
+    //the rule. Automatically true if the specification is defined for either white or black.
+    var background_match = rule["either"] ? true : rule[state.bg].length == 1 ? true : rule[state.bg].length == 2 ? state.bg2 == state.bg : rule[state.bg].length == 3 ? state.bg1 == state.bg && state.bg2 == state.bg : false 
+    
+    //env is the environment under which the block orders should be checked
+    //set to either if it is available, otherwise just background of last click 
+    var env = rule["either"] ? "either" : state.bg 
+         
+    //check that blocks match for the apporpriate background condition 
+    var blocks_consistent = rule[env].length == 1 ? rule[env][0] == state.action : rule[env].length == 2 ? rule[env][0] == state.a2 && rule[env][1] == state.action : rule[env].length == 3 ? rule[env][0] == state.a1 && rule[env][1] == state.a2 && rule[env][2] == state.action : false 
+    
+    // calculate the reward, given the rule and the action/background observed in a given state
+    var reward = background_match && blocks_consistent ? 1 : 0
+    
+    // observe that the calculated reward matches the observed reward
+    condition(reward == state.reward)
+  }
+  
+  // map the play() function to all observations
+  map(play, observations)
+  
+  // return the posterior on the rule
+  return rule["ID"]
+}
+
+// this model can infer based on negative evidence:
+// the fact that each of the four observations above led to reward 0 causes the model to put all
+// probability mass equally on the two remaining rules
+
+
+var dist = Infer({method: "MCMC", model: model, samples: 10000})
+var N=123
+var get_score = function(v){Math.pow(Math.E,dist.score(v))}
+var vals = Array.apply(null, {length: N}).map(Number.call, Number)
+var posteriors = map(get_score, vals)
+//display(posteriors)
+json.write(output_folder.concat(p,"_", g, "_slice", JSON.stringify(bound), "_inference.json"), posteriors)
+
+
